@@ -1,0 +1,47 @@
+import fitz  # PyMuPDF
+import re
+from typing import Tuple
+
+
+def parse_resume_pdf(file_bytes: bytes) -> Tuple[str, list[str]]:
+    """
+    Parse a PDF resume and return (full_text, extracted_skills).
+    """
+    doc = fitz.open(stream=file_bytes, filetype="pdf")
+    full_text = ""
+    for page in doc:
+        full_text += page.get_text()
+    doc.close()
+
+    skills = _extract_skills(full_text)
+    return full_text.strip(), skills
+
+
+SKILL_KEYWORDS = [
+    # Languages
+    "Python", "TypeScript", "JavaScript", "Go", "Rust", "Java", "C++", "C#", "Ruby",
+    # Frameworks
+    "FastAPI", "React", "Next.js", "Vue", "Angular", "Django", "Flask", "Express",
+    "Node.js", "Tailwind", "GraphQL", "REST",
+    # AI/ML
+    "Groq", "OpenAI", "LangChain", "LlamaIndex", "Perplexity", "Hugging Face",
+    "PyTorch", "TensorFlow", "scikit-learn", "LLM", "RAG", "embeddings",
+    # Cloud/Infra
+    "AWS", "GCP", "Azure", "Docker", "Kubernetes", "Terraform", "CI/CD",
+    "GitHub Actions", "Vercel", "Railway", "Supabase",
+    # Databases
+    "PostgreSQL", "MySQL", "SQLite", "MongoDB", "Redis", "Pinecone", "Weaviate",
+    # Tools
+    "Git", "Linux", "Nginx", "Celery", "RabbitMQ", "Kafka",
+    # Email/Communication
+    "Gmail SMTP", "SendGrid", "Twilio", "SMTP",
+]
+
+
+def _extract_skills(text: str) -> list[str]:
+    found = []
+    text_lower = text.lower()
+    for skill in SKILL_KEYWORDS:
+        if skill.lower() in text_lower:
+            found.append(skill)
+    return list(dict.fromkeys(found))  # deduplicate, preserve order
