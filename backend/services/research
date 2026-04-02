@@ -1,0 +1,97 @@
+import os
+import requests
+from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
+
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+
+
+def research_recipient(
+    name: str,
+    company: Optional[str],
+    role: Optional[str],
+    linkedin_url: Optional[str] = None,
+) -> str:
+    """
+    Use Claude + web_search tool to research a recipient.
+    Returns a context string injected into the email generation prompt.
+    """
+    if not ANTHROPIC_API_KEY:
+        return _fallback_context(name, company, role)
+
+    query = _build_query(name, company, role, linkedin_url)
+
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "web-search-2025-03-05",
+        "content-type": "application/json",
+    }
+
+    payload = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 1024,
+        "tools": [
+            {
+                "type": "web_search_20250305",
+                "name": "web_search",
+            }
+        ],
+        "system": (
+            "You are a research assistant helping craft personalized cold emails. "
+            "Search the web to find real, current information about the person. "
+            "Return ONLY a concise 150-200 word summary covering: "
+            "their current role and responsibilities, recent projects or company news, "
+            "their tech stack or domain focus, and any notable achievements or public activity. "
+            "Be factual and specific. Do not include contact info or speculation."
+        ),
+        "messages": [{"role": "user", "content": query}],
+    }
+
+    try:
+        response = requests.post(ANTHROPIC_URL, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+
+        # Extract the final text response (Claude writes this after using web_search)
+        text_blocks = [
+            block["text"]
+            for block in data.get("content", [])
+            if block.get("type") == "text"
+        ]
+        if text_blocks:
+            return " ".join(text_blocks).strip()
+
+        return _fallback_context(name, company, role)
+
+    except Exception as e:
+        print(f"[Anthropic Research] Failed for {name}: {e}")
+        return _fallback_context(name, company, role)
+
+
+def _build_query(name: str, company: Optional[str], role: Optional[str], linkedin_url: Optional[str]) -> str:
+    parts = [f"Research {name}"]
+    if role:
+        parts.append(f"who is {role}")
+    if company:
+        parts.append(f"at {company}")
+    if linkedin_url:
+        parts.append(f"(LinkedIn: {linkedin_url})")
+    parts.append(
+        "— find their current responsibilities, recent work, tech stack, "
+        "recent company news, and any notable public activity or achievements."
+    )
+    return " ".join(parts)
+
+
+def _fallback_context(name: str, company: Optional[str], role: Optional[str]) -> str:
+    ctx = f"{name}"
+    if role:
+        ctx += f" is a {role}"
+    if company:
+        ctx += f" at {company}"
+    ctx += ". No additional research context available (ANTHROPIC_API_KEY not configured)."
+    return ctx
