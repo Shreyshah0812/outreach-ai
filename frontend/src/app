@@ -1,0 +1,40 @@
+import { Routes, Route, useParams } from 'react-router-dom'
+import Sidebar from './components/Sidebar'
+import HomePage from './pages/HomePage'
+import SetupPage from './pages/SetupPage'
+import RecipientsPage from './pages/RecipientsPage'
+import PreviewPage from './pages/PreviewPage'
+import SendPage from './pages/SendPage'
+
+function CampaignLayout() {
+  const { id } = useParams<{ id: string }>()
+  return (
+    <div className="flex min-h-screen">
+      <Sidebar campaignId={Number(id)} />
+      <Routes>
+        <Route path="setup" element={<SetupPage />} />
+        <Route path="recipients" element={<RecipientsPage />} />
+        <Route path="preview" element={<PreviewPage />} />
+        <Route path="send" element={<SendPage />} />
+      </Routes>
+    </div>
+  )
+}
+
+function HomeLayout() {
+  return (
+    <div className="flex min-h-screen">
+      <Sidebar />
+      <HomePage />
+    </div>
+  )
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<HomeLayout />} />
+      <Route path="/campaign/:id/*" element={<CampaignLayout />} />
+    </Routes>
+  )
+}
