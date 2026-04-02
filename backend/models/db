@@ -1,0 +1,49 @@
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from datetime import datetime
+
+Base = declarative_base()
+
+
+class Campaign(Base):
+    __tablename__ = "campaigns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    sender_email = Column(String(255), nullable=False)
+    tone = Column(String(100), default="Concise & Direct")
+    send_delay_seconds = Column(Integer, default=0)
+    resume_text = Column(Text, nullable=True)
+    job_description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    recipients = relationship("Recipient", back_populates="campaign", cascade="all, delete-orphan")
+
+
+class Recipient(Base):
+    __tablename__ = "recipients"
+
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False)
+    company = Column(String(255), nullable=True)
+    role = Column(String(255), nullable=True)
+    linkedin_url = Column(String(500), nullable=True)
+
+    research_context = Column(Text, nullable=True)
+    research_status = Column(String(50), default="pending")  # pending | researching | done | failed
+
+    generated_subject = Column(String(500), nullable=True)
+    generated_body = Column(Text, nullable=True)
+    personalization_score = Column(Float, nullable=True)
+    generation_status = Column(String(50), default="pending")  # pending | generating | done | failed
+
+    send_status = Column(String(50), default="queued")  # queued | sent | failed
+    sent_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    campaign = relationship("Campaign", back_populates="recipients")
