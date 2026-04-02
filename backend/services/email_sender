@@ -1,0 +1,68 @@
+import os
+import smtplib
+import asyncio
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+
+load_dotenv()
+
+GMAIL_USER = os.getenv("GMAIL_USER", "")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 587
+
+
+def send_email(
+    to_email: str,
+    subject: str,
+    body: str,
+    from_name: str = "OutReach AI",
+) -> bool:
+    """
+    Send an email via Gmail SMTP.
+    Returns True on success, raises on failure.
+    """
+    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
+        raise ValueError(
+            "Gmail credentials not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env"
+        )
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"{from_name} <{GMAIL_USER}>"
+    msg["To"] = to_email
+
+    # Plain text part
+    text_part = MIMEText(body, "plain")
+    msg.attach(text_part)
+
+    # HTML part (converts \n to <br>)
+    html_body = body.replace("\n", "<br>")
+    html_part = MIMEText(
+        f"<html><body style='font-family:Arial,sans-serif;font-size:14px;line-height:1.7'>{html_body}</body></html>",
+        "html"
+    )
+    msg.attach(html_part)
+
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        server.ehlo()
+        server.starttls()
+        server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+        server.sendmail(GMAIL_USER, to_email, msg.as_string())
+
+    return True
+
+
+async def send_email_async(
+    to_email: str,
+    subject: str,
+    body: str,
+    from_name: str = "OutReach AI",
+) -> bool:
+    """Async wrapper for send_email using thread executor."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,
+        lambda: send_email(to_email, subject, body, from_name)
+    )
