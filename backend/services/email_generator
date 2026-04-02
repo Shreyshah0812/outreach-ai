@@ -1,0 +1,126 @@
+import os
+import json
+import re
+import requests
+from typing import Tuple, Optional
+from dotenv import load_dotenv
+
+load_dotenv()
+
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+MODEL = "claude-sonnet-4-6"
+
+
+def generate_email(
+    recipient_name: str,
+    recipient_email: str,
+    recipient_company: Optional[str],
+    recipient_role: Optional[str],
+    research_context: str,
+    resume_text: str,
+    job_description: str,
+    tone: str = "Concise & Direct",
+) -> Tuple[str, str, float]:
+    """
+    Generate a personalized cold email using Claude.
+    Returns (subject, body, personalization_score 0-100).
+    """
+    if not ANTHROPIC_API_KEY:
+        return _fallback_email(recipient_name, recipient_company)
+
+    system_prompt = _build_system_prompt(tone)
+    user_prompt = _build_user_prompt(
+        recipient_name, recipient_email, recipient_company,
+        recipient_role, research_context, resume_text, job_description
+    )
+
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+
+    payload = {
+        "model": MODEL,
+        "max_tokens": 1024,
+        "system": system_prompt,
+        "messages": [{"role": "user", "content": user_prompt}],
+    }
+
+    response = requests.post(ANTHROPIC_URL, headers=headers, json=payload, timeout=30)
+    response.raise_for_status()
+    data = response.json()
+
+    raw = data["content"][0]["text"].strip()
+    return _parse_response(raw, recipient_name, recipient_company)
+
+
+def _build_system_prompt(tone: str) -> str:
+    tone_instructions = {
+        "Concise & Direct": "Keep it under 150 words. Lead with a specific, relevant observation. No fluff.",
+        "Warm & Conversational": "Write like a smart colleague reaching out. Friendly but substantive.",
+        "Formal & Professional": "Polished and professional. Suitable for C-suite outreach.",
+    }
+    tone_note = tone_instructions.get(tone, tone_instructions["Concise & Direct"])
+
+    return f"""You are an expert cold email writer. Write personalized outreach emails that get responses.
+
+Tone: {tone}
+Instruction: {tone_note}
+
+Rules:
+- Reference something SPECIFIC about the recipient from the research context
+- Connect their work to the sender's background in a genuine way
+- End with one clear, low-friction CTA (e.g., "Worth a 15-min call?")
+- Never mention AI or that the email was generated
+- No generic openers like "I hope this finds you well"
+
+Respond ONLY in this exact JSON format (no markdown, no extra text):
+{{
+  "subject": "email subject line here",
+  "body": "full email body here with \\n for line breaks",
+  "personalization_score": 87
+}}"""
+
+
+def _build_user_prompt(
+    name: str, email: str, company: Optional[str], role: Optional[str],
+    research: str, resume: str, jd: str
+) -> str:
+    return f"""Write a cold email to this recipient:
+
+RECIPIENT:
+- Name: {name}
+- Email: {email}
+- Company: {company or "Unknown"}
+- Role: {role or "Unknown"}
+
+RESEARCH CONTEXT (web research via Claude):
+{research}
+
+SENDER'S RESUME (key context):
+{resume[:2000]}
+
+JOB DESCRIPTION / CONTEXT:
+{jd[:1000]}
+
+Now write the personalized cold email."""
+
+
+def _parse_response(raw: str, name: str, company: Optional[str]) -> Tuple[str, str, float]:
+    try:
+        clean = re.sub(r"```json|```", "", raw).strip()
+        data = json.loads(clean)
+        subject = data.get("subject", f"Connecting with you at {company or 'your company'}")
+        body = data.get("body", raw)
+        score = float(data.get("personalization_score", 75))
+        return subject, body, min(max(score, 0), 100)
+    except Exception:
+        return f"Connecting with {name}", raw, 70.0
+
+
+def _fallback_email(name: str, company: Optional[str]) -> Tuple[str, str, float]:
+    subject = f"Quick intro — {company or 'your work'} caught my eye"
+    body = f"Hi {name},\n\nI came across your work and wanted to reach out.\n\nWould a quick 15-min call make sense?\n\n— [Your Name]"
+    return subject, body, 40.0
