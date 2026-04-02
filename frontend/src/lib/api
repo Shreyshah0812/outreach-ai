@@ -1,0 +1,91 @@
+import axios from 'axios'
+
+const api = axios.create({
+  baseURL: '/api',
+  headers: { 'Content-Type': 'application/json' },
+})
+
+// ─── Types ───────────────────────────────────────────────────
+
+export interface Campaign {
+  id: number
+  name: string
+  sender_email: string
+  tone: string
+  send_delay_seconds: number
+  job_description: string | null
+  resume_text: string | null
+  created_at: string
+}
+
+export interface Recipient {
+  id: number
+  campaign_id: number
+  name: string
+  email: string
+  company: string | null
+  role: string | null
+  linkedin_url: string | null
+  research_status: 'pending' | 'researching' | 'done' | 'failed'
+  research_context: string | null
+  generation_status: 'pending' | 'generating' | 'done' | 'failed'
+  generated_subject: string | null
+  generated_body: string | null
+  personalization_score: number | null
+  send_status: 'queued' | 'sent' | 'failed'
+  sent_at: string | null
+  error_message: string | null
+  created_at: string
+}
+
+export interface CampaignCreate {
+  name: string
+  sender_email: string
+  tone: string
+  send_delay_seconds: number
+  job_description?: string
+}
+
+export interface RecipientCreate {
+  campaign_id: number
+  name: string
+  email: string
+  company?: string
+  role?: string
+  linkedin_url?: string
+}
+
+// ─── Campaign API ────────────────────────────────────────────
+
+export const campaignApi = {
+  list: () => api.get<Campaign[]>('/campaigns').then(r => r.data),
+  get: (id: number) => api.get<Campaign>(`/campaigns/${id}`).then(r => r.data),
+  create: (data: CampaignCreate) => api.post<Campaign>('/campaigns', data).then(r => r.data),
+  delete: (id: number) => api.delete(`/campaigns/${id}`).then(r => r.data),
+  uploadResume: (id: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post(`/campaigns/${id}/upload-resume`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data)
+  },
+}
+
+// ─── Recipient API ───────────────────────────────────────────
+
+export const recipientApi = {
+  list: (campaignId: number) =>
+    api.get<Recipient[]>(`/recipients/campaign/${campaignId}`).then(r => r.data),
+  get: (id: number) => api.get<Recipient>(`/recipients/${id}`).then(r => r.data),
+  create: (data: RecipientCreate) => api.post<Recipient>('/recipients', data).then(r => r.data),
+  bulkCreate: (recipients: RecipientCreate[]) =>
+    api.post<Recipient[]>('/recipients/bulk', { recipients }).then(r => r.data),
+  update: (id: number, data: Partial<Recipient>) =>
+    api.patch<Recipient>(`/recipients/${id}`, data).then(r => r.data),
+  delete: (id: number) => api.delete(`/recipients/${id}`).then(r => r.data),
+  research: (id: number) => api.post<Recipient>(`/recipients/${id}/research`).then(r => r.data),
+  generate: (id: number) => api.post<Recipient>(`/recipients/${id}/generate`).then(r => r.data),
+  send: (id: number) => api.post<Recipient>(`/recipients/${id}/send`).then(r => r.data),
+  sendAll: (campaignId: number) =>
+    api.post(`/recipients/campaign/${campaignId}/send-all`).then(r => r.data),
+}
