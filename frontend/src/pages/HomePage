@@ -1,0 +1,141 @@
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { campaignApi, Campaign, CampaignCreate } from '../lib/api'
+import { Plus, Mail, Trash2, ArrowRight } from 'lucide-react'
+
+export default function HomePage() {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState<CampaignCreate>({
+    name: '',
+    sender_email: '',
+    tone: 'Concise & Direct',
+    send_delay_seconds: 30,
+  })
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    campaignApi.list().then(setCampaigns).finally(() => setLoading(false))
+  }, [])
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault()
+    setCreating(true)
+    try {
+      const campaign = await campaignApi.create(form)
+      navigate(`/campaign/${campaign.id}/setup`)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm('Delete this campaign?')) return
+    await campaignApi.delete(id)
+    setCampaigns(c => c.filter(x => x.id !== id))
+  }
+
+  return (
+    <div className="flex-1 p-8 max-w-4xl">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-xl font-semibold">Campaigns</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Manage your cold email campaigns</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+          <Plus size={14} /> New Campaign
+        </button>
+      </div>
+
+      {/* New campaign form */}
+      {showForm && (
+        <div className="card mb-6">
+          <h2 className="font-medium text-sm mb-4">New Campaign</h2>
+          <form onSubmit={handleCreate} className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Campaign Name</label>
+              <input
+                className="input"
+                placeholder="e.g. AI Startup Outreach Q1"
+                required
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Sender Email</label>
+              <input
+                className="input"
+                type="email"
+                placeholder="you@gmail.com"
+                required
+                value={form.sender_email}
+                onChange={e => setForm(f => ({ ...f, sender_email: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Tone</label>
+              <select
+                className="input"
+                value={form.tone}
+                onChange={e => setForm(f => ({ ...f, tone: e.target.value }))}
+              >
+                <option>Concise & Direct</option>
+                <option>Warm & Conversational</option>
+                <option>Formal & Professional</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Send delay (seconds)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={300}
+                value={form.send_delay_seconds}
+                onChange={e => setForm(f => ({ ...f, send_delay_seconds: +e.target.value }))}
+              />
+            </div>
+            <div className="col-span-2 flex gap-2 justify-end">
+              <button type="button" className="btn" onClick={() => setShowForm(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={creating}>
+                {creating ? 'Creating…' : 'Create Campaign →'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Campaign list */}
+      {loading ? (
+        <p className="text-sm text-gray-400">Loading…</p>
+      ) : campaigns.length === 0 ? (
+        <div className="card text-center py-16">
+          <Mail size={32} className="mx-auto text-gray-300 mb-3" />
+          <p className="text-sm text-gray-500">No campaigns yet. Create your first one.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {campaigns.map(c => (
+            <div key={c.id} className="card flex items-center justify-between hover:border-blue-200 transition-colors">
+              <div>
+                <p className="font-medium text-sm">{c.name}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{c.sender_email} · {c.tone}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button className="btn btn-sm text-red-500 border-red-100 hover:bg-red-50" onClick={() => handleDelete(c.id)}>
+                  <Trash2 size={12} />
+                </button>
+                <button className="btn btn-sm btn-primary" onClick={() => navigate(`/campaign/${c.id}/setup`)}>
+                  Open <ArrowRight size={12} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
